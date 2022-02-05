@@ -4,35 +4,48 @@ using System.Linq;
 using System.IO;
 using System.Xml;
 using System.Text;
+using XPathGenerator.TextAnalysis;
 
 namespace XPathGenerator
 {
     class Program
     {
         /// <summary>
-        /// 
+        /// XPath生成
         /// </summary>
-        /// <param name="args"></param>
+        /// <param name="args">
+        /// -i XMLファイルを指定します
+        /// -xml XMLを直接コマンド引数で指定します　※「"」のエスケープをすること、-iオプション優先
+        /// -o 結果の出力先を指定します
+        /// </param>
         static void Main(string[] args)
         {
             string xmlPath = GetParameter(args, "-i");
             string resultPath = GetParameter(args, "-o");
 
-            string xml;
+            string xml = GetParameter(args, "-xml");
+
             if (!string.IsNullOrEmpty(xmlPath))
             {
                 xml = File.ReadAllText(xmlPath);
             }
-            else
+            else if (string.IsNullOrEmpty(xml))
             {
                 xml = TestXML;
             }
 
-            string xPathListString = GetXPathList(xml);
+            if (string.IsNullOrEmpty(xml)) throw new ArgumentNullException("XMLの内容がありません");
+
+            var list = new AnalysisXml(xml);
+
+            var sb = new StringBuilder();
+            list.AnalysisList.ForEach(x => sb.AppendLine(x.ToString()));
+            string xPathListString = sb.ToString();
 
             if (string.IsNullOrEmpty(resultPath))
             {
                 Console.WriteLine(xPathListString);
+
                 //すぐ終了しないよう停止
                 Console.ReadKey();
             }
@@ -42,56 +55,12 @@ namespace XPathGenerator
             }
         }
 
-        private static string GetXPathList(string xml)
-        {
-            var doc = new XmlDocument();
-            doc.LoadXml(xml);
-
-            var topElement = doc.DocumentElement;
-
-            var list = GetXPathFromChildNodes(topElement.ChildNodes, topElement.Name);
-
-            var sb = new StringBuilder();
-            list.ForEach(x => sb.AppendLine(Format(x)));
-            return sb.ToString();
-        }
-
-        static List<(string, string)> GetXPathFromChildNodes(XmlNodeList nodes, string xPath)
-        {
-            var list = new List<(string, string)>();
-            foreach (XmlNode node in nodes)
-            {
-                list.AddRange(GetXPathValue(node, xPath));
-            }
-            return list;
-        }
-
-        static List<(string, string)> GetXPathValue(XmlNode node, string xPath)
-        {
-            if (node.HasChildNodes)
-            {
-                string newXPath = $"{xPath}/{node.Name}";
-                return GetXPathFromChildNodes(node.ChildNodes, newXPath);
-            }
-            else
-            {
-                string newXPath;
-                if (node.Name.Contains('#'))
-                {
-                    //属性は省略
-                    newXPath = xPath;
-                }
-                else
-                {
-                    newXPath = $"{xPath}/{node.Name}";
-
-                }
-                return new List<(string, string)> { (newXPath, node.Value) };
-            }
-        }
-
-        private static string Format((string, string) x) => $@"""{x.Item1}"", ""{x.Item2}""";
-
+        /// <summary>
+        /// コマンドラインパラメータを解析し、オプション値を取得する
+        /// </summary>
+        /// <param name="args">コマンドラインパラメータ</param>
+        /// <param name="optionName">取り出すオプションの名前</param>
+        /// <returns>オプション値</returns>
         private static string GetParameter(string[] args, string optionName)
         {
             int index = Array.IndexOf(args, optionName);
@@ -99,21 +68,27 @@ namespace XPathGenerator
             {
                 return null;
             }
-
-            return args[index + 1];
+            else if (index + 1 >= args.Length)
+            {
+                throw new ArgumentNullException($"{optionName}の値がありません");
+            }
+            else
+            {
+                return args[index + 1];
+            }
         }
 
         private static string TestXML =>
             @"<?xml version=""1.0"" encoding=""UTF-8""?> 
             <root> 
                 <node>
-                <data type=""text"">データ1</data> 
+                    <data type=""text"">データ1</data> 
                 </node>
                 <node> 
-                <data type=""text"">データ2</data> 
+                    <data type=""text"">データ2</data> 
                 </node>
                 <node>
-                <data type=""text"">データ3</data>
+                    <data type=""text"">データ3</data>
                 <data2>
                     <value>aaa</value>
                     <value2/>
